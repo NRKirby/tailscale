@@ -31,6 +31,7 @@ import (
 	"tailscale.com/types/key"
 	"tailscale.com/types/logger"
 	"tailscale.com/util/clientmetric"
+	"tailscale.com/wgengine/capture"
 	"tailscale.com/wgengine/filter"
 )
 
@@ -68,6 +69,8 @@ var parsedPacketPool = sync.Pool{New: func() any { return new(packet.Parsed) }}
 // FilterFunc is a packet-filtering function with access to the Wrapper device.
 // It must not hold onto the packet struct, as its backing storage will be reused.
 type FilterFunc func(*packet.Parsed, *Wrapper) filter.Response
+
+type CaptureFunc func(capture.Path, time.Time, []byte)
 
 // Wrapper augments a tun.Device with packet filtering and injection.
 type Wrapper struct {
@@ -174,6 +177,8 @@ type Wrapper struct {
 
 	// stats maintains per-connection counters.
 	stats atomic.Pointer[connstats.Statistics]
+
+	captureHook syncs.AtomicValue[CaptureFunc]
 }
 
 // tunInjectedRead is an injected packet pretending to be a tun.Read().
@@ -569,6 +574,9 @@ func (t *Wrapper) Read(buffs [][]byte, sizes []int, offset int) (int, error) {
 				fn()
 			}
 		}
+		if capt := t.captureHook.Load(); capt != nil {
+			capt(capture.FromLocal, time.Now(), data[res.dataOffset:])
+		}
 		if !t.disableFilter {
 			response := t.filterOut(p)
 			if response != filter.Accept {
@@ -632,6 +640,10 @@ func (t *Wrapper) injectedRead(res tunInjectedRead, buf []byte, offset int) (int
 }
 
 func (t *Wrapper) filterIn(p *packet.Parsed) filter.Response {
+	if capt := t.captureHook.Load(); capt != nil {
+		capt(capture.FromPeer, time.Now(), p.Buffer())
+	}
+
 	if p.IPProto == ipproto.TSMP {
 		if pingReq, ok := p.AsTSMPPing(); ok {
 			t.noteActivity()
@@ -789,6 +801,10 @@ func (t *Wrapper) InjectInboundPacketBuffer(pkt stack.PacketBufferPtr) error {
 	}
 	pkt.DecRef()
 
+	if capt := t.captureHook.Load(); capt != nil {
+		capt(capture.SynthesizedToLocal, time.Now(), buf[PacketStartOffset:])
+	}
+
 	return t.InjectInboundDirect(buf, PacketStartOffset)
 }
 
@@ -887,6 +903,11 @@ func (t *Wrapper) InjectOutboundPacketBuffer(packet stack.PacketBufferPtr) error
 		packet.DecRef()
 		return nil
 	}
+	if capt := t.captureHook.Load(); capt != nil {
+		b := packet.ToBuffer()
+		capt(capture.SynthesizedToPeer, time.Now(), b.Flatten())
+	}
+
 	t.injectOutbound(tunInjectedRead{packet: packet})
 	return nil
 }
@@ -917,3 +938,7 @@ var (
 	metricPacketOutDropFilter    = clientmetric.NewCounter("tstun_out_to_wg_drop_filter")
 	metricPacketOutDropSelfDisco = clientmetric.NewCounter("tstun_out_to_wg_drop_self_disco")
 )
+
+func (t *Wrapper) InstallCaptureHook(cb CaptureFunc) {
+	t.captureHook.Store(cb)
+}

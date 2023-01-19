@@ -21,9 +21,11 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -180,6 +182,16 @@ var debugCmd = &ffcli.Command{
 			Name:      "derp",
 			Exec:      runDebugDERP,
 			ShortHelp: "test a DERP configuration",
+		},
+		{
+			Name:      "capture",
+			Exec:      runCapture,
+			ShortHelp: "runs a packet capture for debugging",
+			FlagSet: (func() *flag.FlagSet {
+				fs := newFlagSet("capture")
+				fs.StringVar(&captureArgs.addr, "addr", "127.0.0.1:29123", "address to listen")
+				return fs
+			})(),
 		},
 	},
 }
@@ -712,5 +724,27 @@ func runDebugDERP(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("%s\n", must.Get(json.MarshalIndent(st, "", " ")))
+	return nil
+}
+
+var captureArgs struct {
+	addr string
+}
+
+func runCapture(ctx context.Context, args []string) error {
+	if err := localClient.StartDebugCapture(ctx, captureArgs.addr); err != nil {
+		return err
+	}
+	defer localClient.StopDebugCapture(ctx)
+
+	fmt.Printf("pcap stream available at %s. To examine in wireshark, run:\n", captureArgs.addr)
+	fmt.Printf("\twireshark -X lua_script:<path to ts-dissector.lua> -k -i TCP@%s\n", captureArgs.addr)
+	fmt.Println("Dont forget to download the Tailscale debug dissector! You can get it from the Tailscale source tree in wgengine/capture.")
+	fmt.Println()
+	fmt.Println("Press Ctrl-C to stop the capture.")
+
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, syscall.SIGINT)
+	<-interrupt
 	return nil
 }

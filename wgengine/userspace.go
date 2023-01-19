@@ -1580,3 +1580,7 @@ var (
 	metricNumMajorChanges = clientmetric.NewCounter("wgengine_major_changes")
 	metricNumMinorChanges = clientmetric.NewCounter("wgengine_minor_changes")
 )
+
+func (e *userspaceEngine) InstallCaptureHook(cb CaptureCallback) {
+	e.tundev.InstallCaptureHook(tstun.CaptureFunc(cb))
+}

@@ -70,6 +70,8 @@ var handler = map[string]localAPIHandler{
 	"debug-derp-region":           (*Handler).serveDebugDERPRegion,
 	"debug-packet-filter-matches": (*Handler).serveDebugPacketFilterMatches,
 	"debug-packet-filter-rules":   (*Handler).serveDebugPacketFilterRules,
+	"start-debug-capture":         (*Handler).serveStartDebugCapture,
+	"stop-debug-capture":          (*Handler).serveStopDebugCapture,
 	"derpmap":                     (*Handler).serveDERPMap,
 	"dev-set-state-store":         (*Handler).serveDevSetStateStore,
 	"dial":                        (*Handler).serveDial,
@@ -1506,6 +1508,32 @@ func defBool(a string, def bool) bool {
 		return def
 	}
 	return v
+}
+
+func (h *Handler) serveStartDebugCapture(w http.ResponseWriter, r *http.Request) {
+	if !h.PermitWrite {
+		http.Error(w, "debug access denied", http.StatusForbidden)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.b.StartDebugCapture(r.FormValue("addr"))
+}
+
+func (h *Handler) serveStopDebugCapture(w http.ResponseWriter, r *http.Request) {
+	if !h.PermitWrite {
+		http.Error(w, "debug access denied", http.StatusForbidden)
+		return
+	}
+	if r.Method != "POST" {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.b.StopDebugCapture()
 }
 
 var (

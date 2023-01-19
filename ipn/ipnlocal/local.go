@@ -73,6 +73,7 @@ import (
 	"tailscale.com/version"
 	"tailscale.com/version/distro"
 	"tailscale.com/wgengine"
+	"tailscale.com/wgengine/capture"
 	"tailscale.com/wgengine/filter"
 	"tailscale.com/wgengine/magicsock"
 	"tailscale.com/wgengine/router"
@@ -144,6 +145,7 @@ type LocalBackend struct {
 	em                    *expiryManager // non-nil
 	sshAtomicBool         atomic.Bool
 	shutdownCalled        bool // if Shutdown has been called
+	debugSink             *capture.Sink
 
 	// lastProfileID tracks the last profile we've seen from the ProfileManager.
 	// It's used to detect when the user has changed their profile.
@@ -4699,4 +4701,24 @@ func (b *LocalBackend) ListProfiles() []ipn.LoginProfile {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.pm.Profiles()
+}
+
+func (b *LocalBackend) StartDebugCapture(addr string) error {
+	s, err := capture.TCPSink(addr)
+	if err != nil {
+		return err
+	}
+
+	b.debugSink = s
+	b.e.InstallCaptureHook(s.LogPacket)
+	return nil
+}
+
+func (b *LocalBackend) StopDebugCapture() {
+	if b.debugSink == nil {
+		return
+	}
+	b.debugSink.Close()
+	b.debugSink = nil
+	b.e.InstallCaptureHook(nil)
 }

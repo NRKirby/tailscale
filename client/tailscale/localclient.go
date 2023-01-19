@@ -1019,6 +1019,23 @@ func (lc *LocalClient) DebugDERPRegion(ctx context.Context, regionIDOrCode strin
 	return decodeJSON[*ipnstate.DebugDERPRegionReport](body)
 }
 
+func (lc *LocalClient) StartDebugCapture(ctx context.Context, addr string) error {
+	v := url.Values{"addr": {addr}}
+	body, err := lc.send(ctx, "POST", "/localapi/v0/start-debug-capture?"+v.Encode(), 200, nil)
+	if err != nil {
+		return fmt.Errorf("error %w: %s", err, body)
+	}
+	return nil
+}
+
+func (lc *LocalClient) StopDebugCapture(ctx context.Context) error {
+	body, err := lc.send(ctx, "POST", "/localapi/v0/stop-debug-capture", 200, nil)
+	if err != nil {
+		return fmt.Errorf("error %w: %s", err, body)
+	}
+	return nil
+}
+
 // WatchIPNBus subscribes to the IPN notification bus. It returns a watcher
 // once the bus is connected successfully.
 //
