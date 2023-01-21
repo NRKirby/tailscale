@@ -528,6 +528,7 @@ type Hostinfo struct {
 	ShareeNode      bool           `json:",omitempty"` // indicates this node exists in netmap because it's owned by a shared-to user
 	NoLogsNoSupport bool           `json:",omitempty"` // indicates that the user has opted out of sending logs and support
 	WireIngress     bool           `json:",omitempty"` // indicates that the node wants the option to receive ingress connections
+	AllowsUpdate    bool           `json:",omitempty"` // indicates that the node has opted-in to admin-console-drive remote updates
 	Machine         string         `json:",omitempty"` // the current host's machine type (uname -m)
 	GoArch          string         `json:",omitempty"` // GOARCH value (of the built binary)
 	GoArchVar       string         `json:",omitempty"` // GOARM, GOAMD64, etc (of the built binary)
